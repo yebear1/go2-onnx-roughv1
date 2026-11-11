@@ -1,0 +1,14 @@
+diff --git a/clayer/pysertype.c b/clayer/pysertype.c
+--- a/clayer/pysertype.c
++++ b/clayer/pysertype.c
+@@ -609,1 +609,9 @@
+-#if PY_MINOR_VERSION > 6
++#if PY_VERSION_HEX >= 0x030D0000
++    // Python 3.13 made the finalization check public and no longer exports
++    // the private _Py_IsFinalizing symbol used by CycloneDDS 0.10.4.
++    if (!Py_IsFinalizing()) {
++        PyGILState_STATE state = PyGILState_Ensure();
++        Py_DECREF(this->my_py_type);
++        PyGILState_Release(state);
++    }
++#elif PY_MINOR_VERSION > 6

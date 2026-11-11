@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+    <meta name="theme-color" content="#050706" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <title>GO2 // FPV CONTROL</title>
+    <link rel="stylesheet" href="/assets/app.css" />
+  </head>
+  <body>
+    <main class="cockpit">
+      <img class="video-feed" id="videoFeed" src="/video" alt="Go2 前置相机画面" />
+      <div class="video-shade" aria-hidden="true"></div>
+      <div class="reticle" aria-hidden="true"><i></i><i></i><i></i><i></i><span></span></div>
+
+      <header class="top-hud">
+        <div class="brand"><span class="brand-mark"></span><div><b>GO2</b><small>FPV CONTROL</small></div></div>
+        <div class="telemetry">
+          <div><small>MODE</small><strong id="modeLabel">待机</strong></div>
+          <div><small>VX</small><strong id="vx">0.00</strong><em>m/s</em></div>
+          <div><small>WZ</small><strong id="wz">0.00</strong><em>rad/s</em></div>
+          <div><small>LINK</small><strong id="latency">—</strong><em>ms</em></div>
+        </div>
+        <div class="top-actions">
+          <div class="camera-state" id="cameraState"><i></i><span>CAM WAIT</span></div>
+          <div class="battery"><i><b id="batteryBar"></b></i><span id="battery">—</span></div>
+          <button id="fullscreenButton" class="icon-button" aria-label="进入全屏">
+            <svg viewBox="0 0 24 24"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5m13 5h5v-5"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <section class="quick-actions" aria-label="快捷动作">
+        <button data-action="stand_up"><span>↑</span>站立</button>
+        <button data-action="stand_down"><span>↓</span>趴下</button>
+        <button data-action="recovery_stand"><span>↺</span>恢复</button>
+        <button data-action="sit"><span>◇</span>坐下</button>
+      </section>
+
+      <section class="stick-zone left-zone" aria-label="移动摇杆">
+        <div class="stick" id="moveStick">
+          <div class="stick-cross"></div><div class="stick-knob"></div>
+          <span class="axis-label up">前</span><span class="axis-label down">后</span>
+          <span class="axis-label side-left">左</span><span class="axis-label side-right">右</span>
+        </div>
+        <div class="stick-caption"><b>移动</b><code id="moveReadout">0.00 · 0.00</code></div>
+      </section>
+
+      <section class="stick-zone right-zone" aria-label="转向摇杆">
+        <div class="stick" id="yawStick">
+          <div class="stick-cross"></div><div class="stick-knob"></div>
+          <span class="axis-label side-left">左转</span><span class="axis-label side-right">右转</span>
+        </div>
+        <div class="stick-caption"><b>转向</b><code id="yawReadout">0.00</code></div>
+      </section>
+
+      <section class="safety-controls">
+        <button class="arm-button" id="armButton"><i></i><span>长按解锁</span><small>1.2s</small></button>
+        <button class="estop-button" id="safeStopButton"><small>SAFE STOP</small><b>停车</b></button>
+      </section>
+
+      <footer class="bottom-hud">
+        <div id="linkState" class="link-state"><i></i><span>正在连接桥接</span></div>
+        <div class="safety-state"><i class="safe-dot"></i><span id="safetyLabel">控制已锁定</span><em id="watchdogLabel">FAILSAFE —</em></div>
+        <div class="backend" id="backend">SPORT</div>
+      </footer>
+    </main>
+
+    <div class="lock-screen" id="lockScreen" hidden>
+      <form id="pinForm" class="pin-card">
+        <span class="brand-mark"></span><h1>连接 GO2</h1><p>输入机器人侧控制 PIN</p>
+        <input id="pinInput" type="password" inputmode="numeric" maxlength="8" autocomplete="one-time-code" placeholder="••••" />
+        <button type="submit">进入驾驶画面</button><small id="pinError"></small>
+      </form>
+    </div>
+
+    <div class="rotate-screen"><div class="phone-icon">↻</div><b>请横屏使用</b><span>将手机旋转 90° 进入驾驶画面</span></div>
+    <div class="toast" id="toast" role="status"></div>
+    <script src="/assets/app.js"></script>
+  </body>
+</html>
+

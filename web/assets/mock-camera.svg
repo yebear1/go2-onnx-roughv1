@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900">
+  <defs>
+    <linearGradient id="sky" x2="0" y2="1"><stop stop-color="#62736b"/><stop offset="1" stop-color="#34433b"/></linearGradient>
+    <linearGradient id="floor" x2="0" y2="1"><stop stop-color="#46534c"/><stop offset="1" stop-color="#131a17"/></linearGradient>
+    <filter id="blur"><feGaussianBlur stdDeviation="2"/></filter>
+    <pattern id="grid" width="90" height="90" patternUnits="userSpaceOnUse"><path d="M90 0H0v90" fill="none" stroke="#a9b8af" stroke-opacity=".09" stroke-width="2"/></pattern>
+  </defs>
+  <rect width="1600" height="900" fill="url(#sky)"/>
+  <path d="M0 0h310l220 510H0z" fill="#202a26"/><path d="M1600 0h-290l-230 510h520z" fill="#1c2521"/>
+  <path d="M0 900V510h530l270-170 280 170h520v390z" fill="url(#floor)"/>
+  <path d="M0 900V510h530l270-170 280 170h520v390z" fill="url(#grid)"/>
+  <path d="M310 0l220 510M1310 0l-230 510M800 340v560M530 510L275 900m805-390 255 390" fill="none" stroke="#b8c5bd" stroke-opacity=".2" stroke-width="6"/>
+  <g filter="url(#blur)" opacity=".8"><rect x="650" y="280" width="300" height="210" rx="8" fill="#111815"/><rect x="682" y="310" width="236" height="145" fill="#6d877b"/><path d="M690 438l65-68 44 38 53-56 58 86z" fill="#33493f"/></g>
+  <g fill="#d8ff3e" opacity=".5"><circle cx="410" cy="255" r="5"/><circle cx="1190" cy="255" r="5"/></g>
+  <text x="50%" y="94%" fill="#e9efeb" fill-opacity=".32" text-anchor="middle" font-family="monospace" font-size="18" letter-spacing="7">GO2 CAMERA SIMULATION</text>
+</svg>
+
