@@ -107,6 +107,19 @@ export GO2_BACKEND=sport
 
 桥接发布 `/api/sport/request` 的 `unitree_api/msg/Request`：移动 `1008`、停止 `1003`、站立 `1004`、趴下 `1005`、恢复站立 `1006`、坐下 `1009`。这是官方 `unitree_ros2` 的高层控制路径。
 
+### 树莓派 SDK2 Sport API（无 ROS 2）
+
+树莓派可直接使用已验证的 `unitree_sdk2py` 高层接口，不需要安装 ROS 2。首轮启动保持机器狗在空旷、防滑地面，原厂遥控器在手：
+
+```bash
+export GO2_PIN=<局域网控制PIN>
+export GO2_SDK_SPORT_ENABLE=1
+export GO2_SDK_SPORT_CONFIRM=GROUND_CLEAR_REMOTE_READY
+./run_sdk_sport_web.sh
+```
+
+该启动器固定使用 `eth0`，通过官方 `VideoClient` 开启前置相机图传，并把正常行走档限制为前后 `0.50 m/s`、横移 `0.30 m/s`、转向 `0.80 rad/s`。网页断开、退到后台、看门狗超时、点击停车或服务退出都会调用 `StopMove`。初始版本禁用网页姿态动作按钮，只开放双摇杆移动。
+
 ### 标准 Twist
 
 如果已有节点订阅 `geometry_msgs/msg/Twist`：

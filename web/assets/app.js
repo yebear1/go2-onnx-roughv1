@@ -19,6 +19,15 @@
     el.camera.querySelector("span").textContent = live ? "CAM LIVE" : mock ? "CAM SIM" : video?.error ? "CAM ERROR" : "CAM WAIT";
   }
 
+  let videoRetryTimer = null;
+  function reloadVideo(delay = 0) {
+    clearTimeout(videoRetryTimer);
+    videoRetryTimer = setTimeout(() => {
+      if (!state.connected) return;
+      el.video.src = `/video?cache=${Date.now()}`;
+    }, delay);
+  }
+
   function connect() {
     const protocol = location.protocol === "https:" ? "wss" : "ws";
     const socket = new WebSocket(`${protocol}://${location.host}/ws`);
@@ -33,6 +42,7 @@
     if (message.type === "hello") {
       el.backend.textContent = `${message.backend.toUpperCase()}${message.mock ? " · MOCK" : ""}`;
       el.watchdog.textContent = `FAILSAFE ${message.watchdog_ms}ms`; setCamera(message.video);
+      if (message.video?.mode === "sdk" && message.video?.ready) reloadVideo();
       document.querySelectorAll("[data-action]").forEach((button) => button.disabled = !message.actions);
       if (message.pin_required) el.lock.hidden = false; else state.authenticated = true;
     } else if (message.type === "auth") {
@@ -93,7 +103,11 @@
   }, 50);
   document.addEventListener("visibilitychange", () => { if (document.hidden && state.armed) send({ type: "disarm" }); });
   window.addEventListener("pagehide", () => send({ type: "safe_stop" }));
-  el.video.addEventListener("error", () => { el.camera.className = "camera-state error"; el.camera.querySelector("span").textContent = "CAM ERROR"; });
+  el.video.addEventListener("error", () => {
+    el.camera.className = "camera-state error";
+    el.camera.querySelector("span").textContent = "CAM RETRY";
+    reloadVideo(1200);
+  });
+  el.video.addEventListener("load", () => clearTimeout(videoRetryTimer));
   connect();
 })();
-

@@ -18,6 +18,7 @@ from fastapi.staticfiles import StaticFiles
 
 ROOT = Path(__file__).resolve().parents[1]
 WEB_DIR = ROOT / "web"
+SDK_SPORT_CONFIRMATION = "GROUND_CLEAR_REMOTE_READY"
 
 
 def env_float(name: str, default: float) -> float:
@@ -70,6 +71,15 @@ class Config:
     lowlevel_enable: bool = os.getenv("GO2_LOWLEVEL_ENABLE", "0") == "1"
     lowlevel_test_mode: str = os.getenv("GO2_LOWLEVEL_TEST_MODE", "")
     lowlevel_confirmation: str = os.getenv("GO2_LOWLEVEL_CONFIRM", "")
+    sdk_sport_enable: bool = os.getenv("GO2_SDK_SPORT_ENABLE", "0") == "1"
+    sdk_sport_confirmation: str = os.getenv("GO2_SDK_SPORT_CONFIRM", "")
+
+
+def validate_sdk_sport_gates(enable_send: bool, confirmation: str) -> None:
+    if not enable_send or confirmation != SDK_SPORT_CONFIRMATION:
+        raise RuntimeError(
+            "SDK Sport 真实发送未解锁；需要 GO2_SDK_SPORT_ENABLE=1 和现场安全确认"
+        )
 
 
 CONFIG = Config()
@@ -246,6 +256,135 @@ class RosAdapter:
             self._rclpy.shutdown()
 
 
+class SdkSportAdapter:
+    """Direct Unitree SDK2 high-level controller for Raspberry Pi.
+
+    This adapter never imports LowCmd and cannot publish rt/lowcmd. Browser
+    arming remains independent from the process-level physical safety gate.
+    """
+
+    def __init__(self, config: Config):
+        self.config = config
+        self.mock = False
+        self.client = None
+        self._lowstate_subscriber = None
+        self._sportstate_subscriber = None
+        self._command_lock = threading.Lock()
+        self._moving = False
+        self.telemetry: dict[str, Any] = {
+            "mode": "SDK 高层待机",
+            "mode_id": 0,
+            "gait": "idle",
+            "battery": None,
+            "voltage": None,
+            "velocity": [0.0, 0.0, 0.0],
+            "rpy": [0.0, 0.0, 0.0],
+            "body_height": 0.0,
+            "robot_seen": False,
+            "fault": "",
+        }
+
+    def start(self) -> None:
+        validate_sdk_sport_gates(
+            self.config.sdk_sport_enable,
+            self.config.sdk_sport_confirmation,
+        )
+        from unitree_sdk2py.core.channel import (
+            ChannelFactoryInitialize,
+            ChannelSubscriber,
+        )
+        from unitree_sdk2py.go2.sport.sport_client import SportClient
+        from unitree_sdk2py.idl.unitree_go.msg.dds_ import LowState_, SportModeState_
+
+        interface = self.config.net_iface or "eth0"
+        ChannelFactoryInitialize(self.config.dds_domain, interface)
+
+        self.client = SportClient()
+        self.client.SetTimeout(1.0)
+        self.client.Init()
+
+        self._lowstate_subscriber = ChannelSubscriber("rt/lowstate", LowState_)
+        self._lowstate_subscriber.Init(self._on_low_state, 10)
+        self._sportstate_subscriber = ChannelSubscriber("rt/sportmodestate", SportModeState_)
+        self._sportstate_subscriber.Init(self._on_sport_state, 10)
+
+    def _on_sport_state(self, msg: Any) -> None:
+        mode_names = {
+            0: "待机", 1: "平衡站立", 2: "姿态", 3: "行走", 5: "趴下",
+            6: "关节锁定", 7: "阻尼", 8: "恢复站立", 10: "坐下",
+        }
+        gait_names = {0: "idle", 1: "trot", 2: "run", 3: "stairs", 4: "downstairs", 9: "adjust"}
+        try:
+            velocity = [round(float(value), 3) for value in msg.velocity]
+            self.telemetry.update({
+                "mode": mode_names.get(int(msg.mode), f"模式 {msg.mode}"),
+                "mode_id": int(msg.mode),
+                "gait": gait_names.get(int(msg.gait_type), str(msg.gait_type)),
+                "velocity": velocity,
+                "body_height": round(float(msg.body_height), 3),
+                "robot_seen": True,
+            })
+        except (AttributeError, TypeError, ValueError):
+            self.telemetry["fault"] = "sportmodestate 数据格式异常"
+
+    def _on_low_state(self, msg: Any) -> None:
+        try:
+            self.telemetry.update({
+                "battery": int(msg.bms_state.soc),
+                "voltage": round(float(msg.power_v), 1),
+                "rpy": [round(float(value), 3) for value in msg.imu_state.rpy],
+                "robot_seen": True,
+            })
+        except (AttributeError, TypeError, ValueError):
+            self.telemetry["fault"] = "lowstate 数据格式异常"
+
+    def _stop_locked(self) -> None:
+        if self.client is not None:
+            result = self.client.StopMove()
+            if result != 0:
+                self.telemetry["fault"] = f"StopMove 返回错误码 {result}"
+        self._moving = False
+        self.telemetry["velocity"] = [0.0, 0.0, 0.0]
+
+    def move(self, forward: float, lateral: float, yaw: float) -> None:
+        if self.client is None:
+            return
+        moving = abs(forward) + abs(lateral) + abs(yaw) > 0.005
+        with self._command_lock:
+            if not moving:
+                if self._moving:
+                    self._stop_locked()
+                return
+            result = self.client.Move(forward, lateral, yaw)
+            if result != 0:
+                self.telemetry["fault"] = f"Move 返回错误码 {result}"
+                self._stop_locked()
+                raise RuntimeError(self.telemetry["fault"])
+            self._moving = True
+            self.telemetry["velocity"] = [
+                round(forward, 3), round(lateral, 3), round(yaw, 3)
+            ]
+
+    def action(self, action: str) -> bool:
+        # Keep posture-changing actions unavailable during initial web testing.
+        return False
+
+    def controlled_stop(self) -> None:
+        with self._command_lock:
+            self._stop_locked()
+
+    def close(self) -> None:
+        try:
+            self.controlled_stop()
+        finally:
+            for subscriber in (self._sportstate_subscriber, self._lowstate_subscriber):
+                if subscriber is not None:
+                    subscriber.Close()
+            self._sportstate_subscriber = None
+            self._lowstate_subscriber = None
+            self.client = None
+
+
 class DdsPolicyAdapter:
     """Feed web velocity commands into the V1 policy on Unitree DDS.
 
@@ -418,7 +557,7 @@ class VideoProvider:
 
 
 class ControlHub:
-    def __init__(self, adapter: RosAdapter, video: VideoProvider, config: Config):
+    def __init__(self, adapter: Any, video: VideoProvider, config: Config):
         self.adapter = adapter
         self.video = video
         self.config = config
@@ -552,7 +691,12 @@ class ControlHub:
                 await self.safe_stop("控制端断开，已安全停车并保持运控使能")
 
 
-adapter = DdsPolicyAdapter(CONFIG) if CONFIG.backend == "policy" else RosAdapter(CONFIG)
+if CONFIG.backend == "policy":
+    adapter = DdsPolicyAdapter(CONFIG)
+elif CONFIG.backend == "sdk_sport":
+    adapter = SdkSportAdapter(CONFIG)
+else:
+    adapter = RosAdapter(CONFIG)
 video = VideoProvider(CONFIG)
 hub = ControlHub(adapter, video, CONFIG)
 
